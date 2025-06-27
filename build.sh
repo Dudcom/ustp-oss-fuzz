@@ -2,84 +2,110 @@
 
 # OSS-Fuzz build script for ustp-fuzz
 
-# Initialize PKG_CONFIG_PATH if not set
-export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:-}"
+# Install system dependencies 
+apt-get update
+apt-get install -y build-essential cmake pkg-config git libjson-c-dev
 
-cd "$SRC"
-
-# Clone and build json-c (required by libubox)
-if [ ! -d "json-c" ]; then
-    git clone https://github.com/json-c/json-c.git
-fi
-
-cd json-c
-mkdir -p build
-cd build
-
-cmake .. \
-    -DCMAKE_INSTALL_PREFIX="$SRC/json-c-install" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_STATIC_LIBS=ON \
-    -DBUILD_SHARED_LIBS=OFF
-
-make -j$(nproc)
-make install
-
-cd "$SRC"
+# Set up dependencies directory
+DEPS_DIR="$PWD/deps"
+mkdir -p "$DEPS_DIR"
+cd "$DEPS_DIR"
 
 # Clone and build libubox
 if [ ! -d "libubox" ]; then
-    git clone https://git.openwrt.org/project/libubox.git
+    echo "Downloading libubox..."
+    git clone https://github.com/openwrt/libubox.git
+    cd libubox
+    rm -rf tests examples
+    cd ..
 fi
 
 cd libubox
+# Patch CMakeLists.txt to remove examples subdirectory reference
+if [ -f CMakeLists.txt ]; then
+    sed -i '/ADD_SUBDIRECTORY(examples)/d' CMakeLists.txt
+    sed -i '/add_subdirectory(examples)/d' CMakeLists.txt
+    sed -i '/ADD_SUBDIRECTORY.*examples/d' CMakeLists.txt
+    sed -i '/add_subdirectory.*examples/d' CMakeLists.txt
+fi
 mkdir -p build
 cd build
-
-# Configure libubox without LUA, with json-c
-PKG_CONFIG_PATH="$SRC/json-c-install/lib/pkgconfig:$PKG_CONFIG_PATH" \
-cmake .. \
-    -DCMAKE_INSTALL_PREFIX="$SRC/libubox-install" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_LUA=OFF \
-    -DBUILD_EXAMPLES=OFF \
-    -DCMAKE_PREFIX_PATH="$SRC/json-c-install"
-
+cmake .. -DCMAKE_INSTALL_PREFIX="$DEPS_DIR/install" \
+         -DCMAKE_C_FLAGS="$CFLAGS" \
+         -DBUILD_LUA=OFF \
+         -DBUILD_EXAMPLES=OFF \
+         -DBUILD_TESTS=OFF \
+         -DBUILD_STATIC=ON \
+         -DBUILD_SHARED_LIBS=OFF
 make -j$(nproc)
 make install
+cd "$DEPS_DIR"
 
-cd "$SRC"
-
-# Clone and build libubus  
-if [ ! -d "libubus" ]; then
-    git clone https://git.openwrt.org/project/libubus.git
+# Clone and build libubus
+if [ ! -d "ubus" ]; then
+    echo "Downloading libubus..."
+    git clone https://github.com/openwrt/ubus.git
+    cd ubus
+    rm -rf tests examples
+    cd ..
 fi
 
-cd libubus
+cd ubus
+# Patch CMakeLists.txt to remove examples subdirectory reference
+if [ -f CMakeLists.txt ]; then
+    sed -i '/ADD_SUBDIRECTORY(examples)/d' CMakeLists.txt
+    sed -i '/add_subdirectory(examples)/d' CMakeLists.txt
+    sed -i '/ADD_SUBDIRECTORY.*examples/d' CMakeLists.txt
+    sed -i '/add_subdirectory.*examples/d' CMakeLists.txt
+fi
 mkdir -p build
 cd build
-
-# Configure libubus without LUA
-PKG_CONFIG_PATH="$SRC/json-c-install/lib/pkgconfig:$SRC/libubox-install/lib/pkgconfig:$PKG_CONFIG_PATH" \
-cmake .. \
-    -DCMAKE_INSTALL_PREFIX="$SRC/libubus-install" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_LUA=OFF \
-    -DBUILD_EXAMPLES=OFF \
-    -Dlibubox_include_dir="$SRC/libubox-install/include" \
-    -Dlibubox_library="$SRC/libubox-install/lib/libubox.a" \
-    -DCMAKE_PREFIX_PATH="$SRC/json-c-install;$SRC/libubox-install"
-
+cmake .. -DCMAKE_INSTALL_PREFIX="$DEPS_DIR/install" \
+         -DCMAKE_C_FLAGS="$CFLAGS" \
+         -DBUILD_LUA=OFF \
+         -DBUILD_EXAMPLES=OFF \
+         -DBUILD_TESTS=OFF \
+         -DBUILD_STATIC=ON \
+         -DBUILD_SHARED_LIBS=OFF \
+         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 make -j$(nproc)
 make install
 
+# Check if static library was created, if not create it manually
+if [ ! -f "$DEPS_DIR/install/lib/libubus.a" ]; then
+    echo "Creating static library for libubus..."
+    ar rcs "$DEPS_DIR/install/lib/libubus.a" CMakeFiles/ubus.dir/*.o
+fi
+
+cd "$DEPS_DIR"
+
+# Build libblobmsg_json (part of libubox but separate library)
+if [ ! -f "$DEPS_DIR/install/lib/libblobmsg_json.a" ]; then
+    echo "Building libblobmsg_json..."
+    cd "$DEPS_DIR/libubox/build"
+    # libblobmsg_json should be built as part of libubox
+    if [ -f "libblobmsg_json.a" ]; then
+        cp libblobmsg_json.a "$DEPS_DIR/install/lib/"
+    fi
+    cd "$DEPS_DIR"
+fi
+
+# Go to the ustp-oss-fuzz directory
 cd "$SRC/ustp-oss-fuzz"
 
-# Set up compiler flags
-export CFLAGS="$CFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I$SRC/json-c-install/include -I."
-export CXXFLAGS="$CXXFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I$SRC/json-c-install/include -I."
+# Set up environment variables
+: "${CFLAGS:=-O2 -fPIC}"
+: "${LDFLAGS:=}"
+: "${PKG_CONFIG_PATH:=}"
+: "${LIB_FUZZING_ENGINE:=-fsanitize=fuzzer}"
 
-# Create minimal log.h if it doesn't exist
+# Set up compiler flags
+export PKG_CONFIG_PATH="$DEPS_DIR/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export CFLAGS="$CFLAGS -I$DEPS_DIR/install/include -I."
+export LDFLAGS="$LDFLAGS -L$DEPS_DIR/install/lib"
+export CFLAGS="$CFLAGS -D_GNU_SOURCE -DDUMMY_MODE=1 -DDEBUG -std=gnu99"
+
+# Create minimal headers for missing dependencies
 cat > log.h << 'EOF'
 #ifndef LOG_H
 #define LOG_H
@@ -104,7 +130,6 @@ extern int log_level;
 #endif
 EOF
 
-# Create minimal driver.h
 cat > driver.h << 'EOF'
 #ifndef _MSTP_DRIVER_H
 #define _MSTP_DRIVER_H
@@ -148,7 +173,6 @@ static inline void driver_delete_port(port_t *prt) {
 #endif
 EOF
 
-# Create minimal packet.h
 cat > packet.h << 'EOF'
 #ifndef PACKET_H
 #define PACKET_H
@@ -163,7 +187,6 @@ int packet_sock_init(void);
 #endif
 EOF
 
-# Create minimal libnetlink.h
 cat > libnetlink.h << 'EOF'
 #ifndef LIBNETLINK_H
 #define LIBNETLINK_H
@@ -319,13 +342,22 @@ void Dprintf(int level, const char *fmt, ...) {
 EOF
 $CC $CFLAGS -c log_impl.c -o log_impl.o
 
-# Build the fuzzer
-echo "Building fuzzer..."
-$CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.c \
+echo "Compiling fuzzer..."
+$CC $CFLAGS -c ustp-fuzz.c -o ustp-fuzz.o
+
+echo "Linking fuzzer statically..."
+# Link with full paths to static libraries to avoid linker issues
+$CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.o \
     bridge_track.o brmon.o hmac_md5.o libnetlink.o mstp.o \
     netif_utils.o packet.o worker.o config.o ubus.o log_impl.o \
-    -L"$SRC/libubox-install/lib" -L"$SRC/libubus-install/lib" -L"$SRC/json-c-install/lib" \
-    -lubox -lubus -ljson-c -lpthread \
+    $DEPS_DIR/install/lib/libubox.a \
+    $DEPS_DIR/install/lib/libubus.a \
+    $DEPS_DIR/install/lib/libblobmsg_json.a \
+    $LDFLAGS -ljson-c -lpthread \
     -o $OUT/ustp-fuzz
 
+# Clean up object files
+rm -f *.o
+
 echo "Build completed successfully!"
+echo "Fuzzer binary: $OUT/ustp-fuzz"
