@@ -117,18 +117,64 @@ $CC $CFLAGS -c netif_utils.c -o netif_utils.o
 $CC $CFLAGS -c packet.c -o packet.o
 $CC $CFLAGS -c worker.c -o worker.o
 $CC $CFLAGS -c config.c -o config.o
-$CC $CFLAGS -c ubus.c -o ubus.o
+
+# Create missing function implementations
+cat > missing_funcs.c << 'EOF'
+#include <stdio.h>
+#include <stdarg.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+
+// Log level for fuzzing
+int log_level = 3;
+
+// Dprintf implementation for logging
+void Dprintf(int level, const char *fmt, ...) {
+    if (level > log_level) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    printf("\n");
+    va_end(ap);
+}
+
+// usock implementation (minimal socket creation for fuzzing)
+int usock(int type, const char *host, const char *service) {
+    // Return a dummy socket for fuzzing - most operations will be mocked anyway
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+        // If socket creation fails, return error
+        return -1;
+    }
+    // For fuzzing, just return the socket - don't actually connect
+    return fd;
+}
+
+// Stub ubus functions since we're not using the real ubus.c
+void ustp_ubus_init(void) {
+    // Minimal implementation for fuzzing
+}
+
+void ustp_ubus_exit(void) {
+    // Minimal implementation for fuzzing  
+}
+EOF
+$CC $CFLAGS -c missing_funcs.c -o missing_funcs.o
 
 echo "Compiling fuzzer..."
 $CC $CFLAGS -c ustp-fuzz.c -o ustp-fuzz.o
 
 echo "Linking fuzzer statically..."
 # Link with full paths to static libraries to avoid linker issues
+# Note: Exclude libubus.a to avoid conflicts and use our stub functions instead
 $CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.o \
     bridge_track.o brmon.o hmac_md5.o libnetlink.o mstp.o \
-    netif_utils.o packet.o worker.o config.o ubus.o \
+    netif_utils.o packet.o worker.o config.o missing_funcs.o \
     $DEPS_DIR/install/lib/libubox.a \
-    $DEPS_DIR/install/lib/libubus.a \
     $DEPS_DIR/install/lib/libblobmsg_json.a \
     $LDFLAGS -ljson-c -lpthread \
     -o $OUT/ustp-fuzz
