@@ -169,6 +169,33 @@ echo "Compiling fuzzer..."
 $CC $CFLAGS -c ustp-fuzz.c -o ustp-fuzz.o
 
 echo "Linking fuzzer statically..."
+# Find static json-c library
+JSON_C_STATIC=""
+if pkg-config --exists json-c; then
+    JSON_C_LIBDIR=$(pkg-config --variable=libdir json-c)
+    if [ -f "$JSON_C_LIBDIR/libjson-c.a" ]; then
+        JSON_C_STATIC="$JSON_C_LIBDIR/libjson-c.a"
+    fi
+fi
+
+# Fallback locations for static json-c
+if [ -z "$JSON_C_STATIC" ]; then
+    for path in /usr/lib/x86_64-linux-gnu/libjson-c.a /usr/lib/libjson-c.a /usr/local/lib/libjson-c.a; do
+        if [ -f "$path" ]; then
+            JSON_C_STATIC="$path"
+            break
+        fi
+    done
+fi
+
+# If we still can't find static library, use dynamic linking as last resort
+if [ -z "$JSON_C_STATIC" ]; then
+    echo "Warning: Could not find static libjson-c.a, using dynamic linking"
+    JSON_C_STATIC="-ljson-c"
+fi
+
+echo "Using JSON-C library: $JSON_C_STATIC"
+
 # Link with full paths to static libraries to avoid linker issues
 # Note: Exclude libubus.a to avoid conflicts and use our stub functions instead
 $CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.o \
@@ -176,7 +203,7 @@ $CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.o \
     netif_utils.o packet.o worker.o config.o missing_funcs.o \
     $DEPS_DIR/install/lib/libubox.a \
     $DEPS_DIR/install/lib/libblobmsg_json.a \
-    /usr/lib/x86_64-linux-gnu/libjson-c.a \
+    $JSON_C_STATIC \
     $LDFLAGS -lpthread \
     -o $OUT/ustp-fuzz
 
