@@ -400,7 +400,7 @@ void bridge_bpdu_rcv(int if_index, const unsigned char *data, int len)
 
     /* sanity checks */
     TSTM(br == prt->bridge,, "Bridge mismatch. This bridge is '%s' but port "
-        "'%s' belongs to bridge '%s'", br->sysdeps.name, prt->bridge->sysdeps.name);
+        "'%s' belongs to bridge '%s'", br->sysdeps.name, prt->sysdeps.name, prt->bridge->sysdeps.name);
     TSTM(prt->sysdeps.up,, "Port '%s' should be up", prt->sysdeps.name);
 
     /* Validate Ethernet and LLC header,
@@ -410,12 +410,13 @@ void bridge_bpdu_rcv(int if_index, const unsigned char *data, int len)
     unsigned int l;
     TST(len > sizeof(struct llc_header),);
     h = (struct llc_header *)data;
-    TST(0 == memcmp(h->dest_addr, bridge_group_address, ETH_ALEN),
-             INFO("ifindex %d, len %d, %02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",
-                  if_index, len,
-                  h->dest_addr[0], h->dest_addr[1], h->dest_addr[2],
-                  h->dest_addr[3], h->dest_addr[4], h->dest_addr[5])
-       );
+    if (0 != memcmp(h->dest_addr, bridge_group_address, ETH_ALEN)) {
+        INFO("ifindex %d, len %d, %02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",
+             if_index, len,
+             h->dest_addr[0], h->dest_addr[1], h->dest_addr[2],
+             h->dest_addr[3], h->dest_addr[4], h->dest_addr[5]);
+        return;
+    }
     l = __be16_to_cpu(h->len8023);
     TST(l <= ETH_DATA_LEN && l <= len - ETH_HLEN && l >= LLC_PDU_LEN_U, );
     TST(h->d_sap == LLC_SAP_BSPAN && h->s_sap == LLC_SAP_BSPAN && (h->llc_ctrl & 0x3) == LLC_PDU_TYPE_U,);
