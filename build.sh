@@ -176,7 +176,8 @@ $CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.o \
     netif_utils.o packet.o worker.o config.o missing_funcs.o \
     $DEPS_DIR/install/lib/libubox.a \
     $DEPS_DIR/install/lib/libblobmsg_json.a \
-    $LDFLAGS -ljson-c -lpthread \
+    /usr/lib/x86_64-linux-gnu/libjson-c.a \
+    $LDFLAGS -lpthread \
     -o $OUT/ustp-fuzz
 
 # Clean up object files
