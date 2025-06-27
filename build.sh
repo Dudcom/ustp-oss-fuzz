@@ -2,6 +2,9 @@
 
 # OSS-Fuzz build script for ustp-fuzz
 
+# Initialize PKG_CONFIG_PATH if not set
+export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:-}"
+
 cd "$SRC"
 
 # Clone and build json-c (required by libubox)
