@@ -4,6 +4,26 @@
 
 cd "$SRC"
 
+# Clone and build json-c (required by libubox)
+if [ ! -d "json-c" ]; then
+    git clone https://github.com/json-c/json-c.git
+fi
+
+cd json-c
+mkdir -p build
+cd build
+
+cmake .. \
+    -DCMAKE_INSTALL_PREFIX="$SRC/json-c-install" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_STATIC_LIBS=ON \
+    -DBUILD_SHARED_LIBS=OFF
+
+make -j$(nproc)
+make install
+
+cd "$SRC"
+
 # Clone and build libubox
 if [ ! -d "libubox" ]; then
     git clone https://git.openwrt.org/project/libubox.git
@@ -13,12 +33,14 @@ cd libubox
 mkdir -p build
 cd build
 
-# Configure libubox without LUA
+# Configure libubox without LUA, with json-c
+PKG_CONFIG_PATH="$SRC/json-c-install/lib/pkgconfig:$PKG_CONFIG_PATH" \
 cmake .. \
     -DCMAKE_INSTALL_PREFIX="$SRC/libubox-install" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_LUA=OFF \
-    -DBUILD_EXAMPLES=OFF
+    -DBUILD_EXAMPLES=OFF \
+    -DCMAKE_PREFIX_PATH="$SRC/json-c-install"
 
 make -j$(nproc)
 make install
@@ -35,13 +57,15 @@ mkdir -p build
 cd build
 
 # Configure libubus without LUA
+PKG_CONFIG_PATH="$SRC/json-c-install/lib/pkgconfig:$SRC/libubox-install/lib/pkgconfig:$PKG_CONFIG_PATH" \
 cmake .. \
     -DCMAKE_INSTALL_PREFIX="$SRC/libubus-install" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_LUA=OFF \
     -DBUILD_EXAMPLES=OFF \
     -Dlibubox_include_dir="$SRC/libubox-install/include" \
-    -Dlibubox_library="$SRC/libubox-install/lib/libubox.a"
+    -Dlibubox_library="$SRC/libubox-install/lib/libubox.a" \
+    -DCMAKE_PREFIX_PATH="$SRC/json-c-install;$SRC/libubox-install"
 
 make -j$(nproc)
 make install
@@ -49,8 +73,8 @@ make install
 cd "$SRC/ustp-oss-fuzz"
 
 # Set up compiler flags
-export CFLAGS="$CFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I."
-export CXXFLAGS="$CXXFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I."
+export CFLAGS="$CFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I$SRC/json-c-install/include -I."
+export CXXFLAGS="$CXXFLAGS -I$SRC/libubox-install/include -I$SRC/libubus-install/include -I$SRC/json-c-install/include -I."
 
 # Create minimal log.h if it doesn't exist
 cat > log.h << 'EOF'
@@ -297,8 +321,8 @@ echo "Building fuzzer..."
 $CC $CFLAGS $LIB_FUZZING_ENGINE ustp-fuzz.c \
     bridge_track.o brmon.o hmac_md5.o libnetlink.o mstp.o \
     netif_utils.o packet.o worker.o config.o ubus.o log_impl.o \
-    -L"$SRC/libubox-install/lib" -L"$SRC/libubus-install/lib" \
-    -lubox -lubus -lpthread \
+    -L"$SRC/libubox-install/lib" -L"$SRC/libubus-install/lib" -L"$SRC/json-c-install/lib" \
+    -lubox -lubus -ljson-c -lpthread \
     -o $OUT/ustp-fuzz
 
 echo "Build completed successfully!"
