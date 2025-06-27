@@ -51,10 +51,10 @@ static void dump_packet(const unsigned char *buf, int cc)
     for(i = 0; i < cc; i += 16)
     {
         for(j = 0; j < 16 && i + j < cc; ++j)
-            printf(" %02x", buf[i + j]);
-        printf("\n");
+                    // printf(" %02x", buf[i + j]);
+    // printf("\n");
     }
-    printf("\n");
+    // printf("\n");
     fflush(stdout);
 }
 #endif
@@ -89,10 +89,10 @@ void packet_send(int ifindex, const struct iovec *iov, int iov_count, int len)
     };
 
 #ifdef PACKET_DEBUG
-    printf("Transmit Dst index %d %02x:%02x:%02x:%02x:%02x:%02x\n",
+    // printf("Transmit Dst index %d %02x:%02x:%02x:%02x:%02x:%02x\n",
            sl.sll_ifindex,
            sl.sll_addr[0], sl.sll_addr[1], sl.sll_addr[2],
-           sl.sll_addr[3], sl.sll_addr[4], sl.sll_addr[5]);
+           // sl.sll_addr[3], sl.sll_addr[4], sl.sll_addr[5]);
     {
         int i;
         for(i = 0; i < iov_count; ++i)
@@ -138,10 +138,10 @@ void packet_rcv(void)
 		}
 
 #ifdef PACKET_DEBUG
-		printf("Receive Src ifindex %d %02x:%02x:%02x:%02x:%02x:%02x\n",
+		        // printf("Receive Src ifindex %d %02x:%02x:%02x:%02x:%02x:%02x\n",
 			   sl.sll_ifindex,
 			   sl.sll_addr[0], sl.sll_addr[1], sl.sll_addr[2],
-			   sl.sll_addr[3], sl.sll_addr[4], sl.sll_addr[5]);
+			   // sl.sll_addr[3], sl.sll_addr[4], sl.sll_addr[5]);
 
 		dump_packet(buf, cc);
 #endif

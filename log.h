@@ -47,42 +47,34 @@
 extern void Dprintf(int level, const char *fmt, ...);
 extern int log_level;
 
-#define //print(_level, _fmt, _args...)			\
+#define PRINT(_level, _fmt, _args...)			\
 	({						\
-		if ((_level) <= LOG_LEVEL_MAX)		\
-			Dprintf(_level, _fmt, ##_args);	\
+		/* Disabled for fuzzing */		\
 	})
 
 #define TSTM(x, y, _fmt, _args...)                                         \
     do if(!(x))                                                            \
     {                                                                      \
-        //print(LOG_LEVEL_ERROR, "Error in %s at %s:%d verifying %s. " _fmt, \
-              __PRETTY_FUNCTION__, __FILE__, __LINE__, #x, ##_args);       \
+        /* Error logging disabled for fuzzing */                          \
         return y;                                                          \
     } while (0)
 
 #define TST(x, y) TSTM(x, y, "")
 
 #define LOG(_fmt, _args...) \
-    //print(LOG_LEVEL_DEBUG, "%s: " _fmt, __PRETTY_FUNCTION__, ##_args)
+    /* Disabled for fuzzing */
 
 #define INFO(_fmt, _args...) \
-    //print(LOG_LEVEL_INFO, "%s: " _fmt, __PRETTY_FUNCTION__, ##_args)
+    /* Disabled for fuzzing */
 
 #define ERROR(_fmt, _args...) \
-    //print(LOG_LEVEL_ERROR, "%s: " _fmt, __PRETTY_FUNCTION__, ##_args)
+    /* Disabled for fuzzing */
 
 static inline void dump_hex(void *b, int l)
 {
-    unsigned char *buf = b;
-    char logbuf[80];
-    int i, j;
-    for (i = 0; i < l; i += 16) {
-        for (j = 0; j < 16 && i + j < l; ++j)
-            sprintf(logbuf + j * 3, " %02x", buf[i + j]);
-        //print(LOG_LEVEL_INFO, "%s", logbuf);
-    }
-    //print(LOG_LEVEL_INFO, "\n");
+    /* Disabled for fuzzing */
+    (void)b;
+    (void)l;
 }
 
 #endif /* LOG_H */

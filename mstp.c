@@ -247,7 +247,7 @@ bool MSTP_IN_bridge_create(bridge_t *br, __u8 *macaddr)
     memset(br->vid2fid, 0, sizeof(br->vid2fid));
     memset(br->fid2mstid, 0, sizeof(br->fid2mstid));
     assign(br->MstConfigId.s.selector, (__u8)0);
-    sprintf((char *)br->MstConfigId.s.configuration_name,
+    snprintf((char *)br->MstConfigId.s.configuration_name, sizeof(br->MstConfigId.s.configuration_name),
             "%02hhX%02hhX%02hhX%02hhX%02hhX%02hhX",
             macaddr[0], macaddr[1], macaddr[2],
             macaddr[3], macaddr[4], macaddr[5]);

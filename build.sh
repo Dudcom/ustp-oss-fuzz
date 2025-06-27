@@ -103,7 +103,7 @@ cd "$SRC/ustp-fuzz"
 export PKG_CONFIG_PATH="$DEPS_DIR/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 export CFLAGS="$CFLAGS -I$DEPS_DIR/install/include -I."
 export LDFLAGS="$LDFLAGS -L$DEPS_DIR/install/lib"
-export CFLAGS="$CFLAGS -D_GNU_SOURCE -DDUMMY_MODE=1 -DDEBUG -std=gnu99"
+export CFLAGS="$CFLAGS -D_GNU_SOURCE -DDUMMY_MODE=1 -UPACKET_DEBUG -std=gnu99"
 
 echo "Building USTP object files..."
 
@@ -129,17 +129,14 @@ cat > missing_funcs.c << 'EOF'
 #include <errno.h>
 #include <string.h>
 
-// Log level for fuzzing
-int log_level = 3;
+// Log level for fuzzing - set high to disable all logging
+int log_level = 0;
 
-// Dprintf implementation for logging
+// Dprintf implementation - disabled for fuzzing (no output)
 void Dprintf(int level, const char *fmt, ...) {
-    if (level > log_level) return;
-    va_list ap;
-    va_start(ap, fmt);
-    vprintf(fmt, ap);
-    printf("\n");
-    va_end(ap);
+    // Completely disabled for fuzzing - no output
+    (void)level;
+    (void)fmt;
 }
 
 // usock implementation (minimal socket creation for fuzzing)
@@ -156,11 +153,11 @@ int usock(int type, const char *host, const char *service) {
 
 // Stub ubus functions since we're not using the real ubus.c
 void ustp_ubus_init(void) {
-    // Minimal implementation for fuzzing
+    // Minimal implementation for fuzzing - no output
 }
 
 void ustp_ubus_exit(void) {
-    // Minimal implementation for fuzzing  
+    // Minimal implementation for fuzzing - no output
 }
 EOF
 $CC $CFLAGS -c missing_funcs.c -o missing_funcs.o
