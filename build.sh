@@ -191,6 +191,7 @@ cat > libnetlink.h << 'EOF'
 #ifndef LIBNETLINK_H
 #define LIBNETLINK_H
 
+#include <sys/types.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 
