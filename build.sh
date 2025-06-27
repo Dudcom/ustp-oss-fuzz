@@ -91,7 +91,7 @@ if [ ! -f "$DEPS_DIR/install/lib/libblobmsg_json.a" ]; then
 fi
 
 # Go to the ustp-oss-fuzz directory
-cd "$SRC/ustp-oss-fuzz"
+cd "$SRC/ustp-fuzz"
 
 # Set up environment variables
 : "${CFLAGS:=-O2 -fPIC}"
