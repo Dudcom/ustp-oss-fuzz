@@ -16,7 +16,7 @@ class CFunctionParser:
             if ext.lower() in c_extensions:
                 return [path]
             else:
-                //print(f"Warning: '{path}' doesn't appear to be a C/C++ file")
+                print(f"Warning: '{path}' doesn't appear to be a C/C++ file")
                 return [path]  
         elif os.path.isdir(path):
             c_files = []
@@ -25,25 +25,25 @@ class CFunctionParser:
                 c_files.extend(glob.glob(pattern, recursive=True))
             
             if not c_files:
-                //print(f"No C/C++ files found in directory: {path}")
+                print(f"No C/C++ files found in directory: {path}")
             else:
-                //print(f"Found {len(c_files)} C/C++ files in directory: {path}")
+                print(f"Found {len(c_files)} C/C++ files in directory: {path}")
                 
             return c_files
         else:
-            //print(f"Error: '{path}' is not a valid file or directory")
+            print(f"Error: '{path}' is not a valid file or directory")
             return []
     
     def process_files(self, file_paths):
         for file_path in file_paths:
-            //print(f"Processing: {file_path}")
+            print(f"Processing: {file_path}")
             file_functions = self.find_functions_in_file(file_path)
             
             for func in file_functions:
                 func['file_path'] = file_path
                 
             self.all_functions.extend(file_functions)
-            //print(f"  Found {len(file_functions)} functions")
+            print(f"  Found {len(file_functions)} functions")
         
         return self.all_functions
         
@@ -61,10 +61,10 @@ class CFunctionParser:
             with open(filename, 'r', encoding='utf-8') as file:
                 content = file.read()
         except FileNotFoundError:
-            //print(f"Error: File '{filename}' not found.")
+            print(f"Error: File '{filename}' not found.")
             return []
         except Exception as e:
-            //print(f"Error reading file '{filename}': {e}")
+            print(f"Error reading file '{filename}': {e}")
             return []
         
         clean_content = self.remove_comments_and_strings(content)
@@ -329,7 +329,7 @@ class CFunctionParser:
     def generate_yaml_output(self):
         self.create_graph()
         a = self.find_average()
-        //print("Average branch depth: ", a)
+        print("Average branch depth: ", a)
 
         output = ['"functions":']
         for func in self.all_functions: 
@@ -337,7 +337,7 @@ class CFunctionParser:
             keywords = [ "parse", "handle", "read","search","recv","send","token","match"]
             keyfunction = ["readrecv_message", "read", "ock_recvmsg"]
             if( (any(keyword in func['name'] for keyword in keywords) or any(keyfunction in func['full_function'] for keyfunction in keyfunction)) and val >= 2*a):
-                //print(func['name'], val)
+                print(func['name'], val)
                 output.append(f'- "name": "{func["name"]}"')
                 output.append(f'  "file": "{func.get("file_path", "unknown")}"')
                 if func['params']:
@@ -367,15 +367,15 @@ class CFunctionParser:
         try:
             with open(output_filename, 'w', encoding='utf-8') as f:
                 f.write(yaml_content)
-            //print(f"\nOutput saved to: {output_filename}")
+            print(f"\nOutput saved to: {output_filename}")
             return True
         except Exception as e:
-            //print(f"Error writing output file: {e}")
+            print(f"Error writing output file: {e}")
             return False
 
 def main():
     if len(sys.argv) != 2:
-        //print("test.py <file_or_folder_path>")
+        print("test.py <file_or_folder_path>")
         return
     
     input_path = sys.argv[1]
@@ -384,16 +384,16 @@ def main():
     c_files = parser.get_c_files(input_path)
     
     if not c_files:
-        //print("No files to process.")
+        print("No files to process.")
         return
     
-    //print(f"\nProcessing {len(c_files)} file(s)...")
+    print(f"\nProcessing {len(c_files)} file(s)...")
     
     all_functions = parser.process_files(c_files)
-    //print(f"\nTotal functions found: {len(all_functions)}")
+    print(f"\nTotal functions found: {len(all_functions)}")
     
     parser.save_to_file(input_path)
-    //print("\nDone")
+    print("\nDone")
 
 if __name__ == "__main__":
     main()

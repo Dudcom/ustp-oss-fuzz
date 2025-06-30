@@ -13,7 +13,6 @@
 int cfg_proto = 0;
 int cfg_no_subnet = 0;
 
-// Global variables for controlling fuzzing
 static pthread_t fuzzer_worker_thread;
 static bool fuzzer_shutdown = false;
 static struct {
@@ -25,18 +24,15 @@ static struct {
     .cond = PTHREAD_COND_INITIALIZER,
 };
 
-// Mock worker queue structure
 struct fuzzer_worker_queued_event {
     struct list_head list;
     struct worker_event ev;
 };
 
-// Initialize list head for the queue
 static void init_fuzzer_worker_queue(void) {
     INIT_LIST_HEAD(&fuzzer_worker_queue.queue);
 }
 
-// Mock worker_next_event function for fuzzing
 static struct worker_event *fuzzer_worker_next_event(void) {
     struct fuzzer_worker_queued_event *ev;
     static struct worker_event ev_data;
@@ -62,7 +58,6 @@ static struct worker_event *fuzzer_worker_next_event(void) {
     return &ev_data;
 }
 
-// Mock worker_queue_event function for fuzzing
 static void fuzzer_worker_queue_event(struct worker_event *ev) {
     struct fuzzer_worker_queued_event *evc;
 
@@ -78,24 +73,21 @@ static void fuzzer_worker_queue_event(struct worker_event *ev) {
     pthread_cond_signal(&fuzzer_worker_queue.cond);
 }
 
-// Mock handle_worker_event function for fuzzing
 static void fuzzer_handle_worker_event(struct worker_event *ev) {
     switch (ev->type) {
     case WORKER_EV_ONE_SECOND:
-        // Mock bridge_one_second - just return to avoid infinite processing
+        bridge_one_second();
         break;
     case WORKER_EV_BRIDGE_EVENT:
-        // Mock bridge_event_handler - just return
+        bridge_event_handler();
         break;
     case WORKER_EV_RECV_PACKET:
-        // Mock packet_rcv - just return
+        packet_rcv();
         break;
     case WORKER_EV_BRIDGE_ADD:
-        // Try to create bridge, but don't fail if it errors
         bridge_create(ev->bridge_idx, &ev->bridge_config);
         break;
     case WORKER_EV_BRIDGE_REMOVE:
-        // Try to delete bridge
         bridge_delete(ev->bridge_idx);
         break;
     default:
@@ -103,11 +95,10 @@ static void fuzzer_handle_worker_event(struct worker_event *ev) {
     }
 }
 
-// Fuzzer version of worker_thread_fn
 static void *fuzzer_worker_thread_fn(void *arg) {
     struct worker_event *ev;
     int event_count = 0;
-    const int max_events = 1000; // Prevent infinite loops
+    const int max_events = 1000;
 
     while (event_count < max_events) {
         ev = fuzzer_worker_next_event();
@@ -121,20 +112,17 @@ static void *fuzzer_worker_thread_fn(void *arg) {
     return NULL;
 }
 
-// Helper function to create a mock bridge for MSTP testing
 static bridge_t *create_mock_bridge(const uint8_t *data, size_t size) {
     if (size < 6) return NULL;
     
     bridge_t *br = calloc(1, sizeof(*br));
     if (!br) return NULL;
 
-    // Use fuzzer data as MAC address
     memcpy(br->sysdeps.macaddr, data, 6);
     br->sysdeps.if_index = 1;
     strcpy(br->sysdeps.name, "br0");
     br->sysdeps.up = true;
 
-    // Initialize bridge using MSTP
     if (!MSTP_IN_bridge_create(br, br->sysdeps.macaddr)) {
         free(br);
         return NULL;
@@ -143,22 +131,19 @@ static bridge_t *create_mock_bridge(const uint8_t *data, size_t size) {
     return br;
 }
 
-// Fuzzer for worker_thread_fn
 static void fuzz_worker_thread(const uint8_t *data, size_t size) {
     if (size < 4) return;
 
     init_fuzzer_worker_queue();
     fuzzer_shutdown = false;
 
-    // Create and start the worker thread
     if (pthread_create(&fuzzer_worker_thread, NULL, fuzzer_worker_thread_fn, NULL) != 0) {
         return;
     }
 
-    // Generate events from fuzzer data
     size_t offset = 0;
     int event_count = 0;
-    const int max_events = 50; // Limit events to prevent infinite loops
+    const int max_events = 50;
 
     while (offset < size && event_count < max_events) {
         if (offset + sizeof(struct worker_event) > size) break;
@@ -166,25 +151,20 @@ static void fuzz_worker_thread(const uint8_t *data, size_t size) {
         struct worker_event ev;
         memset(&ev, 0, sizeof(ev));
 
-        // Extract event type from data
-        ev.type = data[offset] % 6; // 0-5 are valid event types
+        ev.type = data[offset] % 6;
         offset++;
 
         if (offset + 4 <= size) {
-            // Extract bridge index
             memcpy(&ev.bridge_idx, data + offset, 4);
             offset += 4;
             
-            // Constrain bridge index to reasonable values
             ev.bridge_idx = abs(ev.bridge_idx) % 1000 + 1;
         }
 
-        // Initialize bridge config with some defaults and fuzzer data
         if (ev.type == WORKER_EV_BRIDGE_ADD && offset + 10 <= size) {
             CIST_BridgeConfig *cfg = &ev.bridge_config;
             memset(cfg, 0, sizeof(*cfg));
             
-            // Set some reasonable defaults
             cfg->protocol_version = protoRSTP;
             cfg->set_protocol_version = true;
             cfg->bridge_forward_delay = (data[offset] % 30) + 4; // 4-33 seconds
@@ -201,15 +181,12 @@ static void fuzz_worker_thread(const uint8_t *data, size_t size) {
         event_count++;
     }
 
-    // Send shutdown event after a short delay
-    usleep(10000); // 10ms
+    usleep(10000);
     fuzzer_shutdown = true;
     pthread_cond_signal(&fuzzer_worker_queue.cond);
 
-    // Wait for thread to finish
     pthread_join(fuzzer_worker_thread, NULL);
 
-    // Clean up any remaining events
     struct fuzzer_worker_queued_event *ev_item, *tmp;
     pthread_mutex_lock(&fuzzer_worker_queue.mutex);
     list_for_each_entry_safe(ev_item, tmp, &fuzzer_worker_queue.queue, list) {
@@ -219,16 +196,13 @@ static void fuzz_worker_thread(const uint8_t *data, size_t size) {
     pthread_mutex_unlock(&fuzzer_worker_queue.mutex);
 }
 
-// Fuzzer for MSTP_IN_create_msti
 static void fuzz_mstp_create_msti(const uint8_t *data, size_t size) {
     if (size < 8) return;
 
-    // Create a mock bridge
     bridge_t *br = create_mock_bridge(data, size);
     if (!br) return;
 
-    // Test various MSTI creation scenarios
-    size_t offset = 6; // Skip MAC address bytes used for bridge creation
+    size_t offset = 6;
     int test_count = 0;
     const int max_tests = 20;
 
@@ -237,7 +211,6 @@ static void fuzz_mstp_create_msti(const uint8_t *data, size_t size) {
         memcpy(&mstid, data + offset, 2);
         offset += 2;
 
-        // Test edge cases and normal cases
         uint16_t test_cases[] = {
             mstid,                    // Direct fuzzer input
             mstid % (MAX_MSTID + 1),  // Constrained to valid range
@@ -251,30 +224,23 @@ static void fuzz_mstp_create_msti(const uint8_t *data, size_t size) {
         for (size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]) && test_count < max_tests; i++) {
             uint16_t test_mstid = test_cases[i];
             
-            // Try to create MSTI
             bool result = MSTP_IN_create_msti(br, test_mstid);
-            
-            // The function should handle invalid inputs gracefully
-            // No assertions here - just exercise the code paths
             
             test_count++;
         }
     }
 
-    // Test creating multiple MSTIs in sequence
     for (uint16_t i = 1; i <= 10 && i <= MAX_MSTID && test_count < max_tests; i++) {
         MSTP_IN_create_msti(br, i);
         test_count++;
     }
 
-    // Test duplicate creation (should be idempotent)
     if (test_count < max_tests) {
         MSTP_IN_create_msti(br, 1);
-        MSTP_IN_create_msti(br, 1); // Duplicate
+        MSTP_IN_create_msti(br, 1);
         test_count += 2;
     }
 
-    // Clean up
     MSTP_IN_delete_bridge(br);
     free(br);
 }
@@ -282,20 +248,16 @@ static void fuzz_mstp_create_msti(const uint8_t *data, size_t size) {
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (size < 1) return 0;
 
-    // Use first byte to determine which fuzzer to run
     uint8_t fuzzer_choice = data[0] % 3;
     
     switch (fuzzer_choice) {
         case 0:
-            // Fuzz worker_thread_fn
             fuzz_worker_thread(data + 1, size - 1);
             break;
         case 1:
-            // Fuzz MSTP_IN_create_msti
             fuzz_mstp_create_msti(data + 1, size - 1);
             break;
         case 2:
-            // Combined fuzzing - both functions
             if (size >= 20) {
                 size_t split = size / 2;
                 fuzz_worker_thread(data + 1, split - 1);

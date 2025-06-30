@@ -129,35 +129,29 @@ cat > missing_funcs.c << 'EOF'
 #include <errno.h>
 #include <string.h>
 
-// Log level for fuzzing - set high to disable all logging
 int log_level = 0;
 
-// Dprintf implementation - disabled for fuzzing (no output)
 void Dprintf(int level, const char *fmt, ...) {
     // Completely disabled for fuzzing - no output
     (void)level;
     (void)fmt;
 }
 
-// usock implementation (minimal socket creation for fuzzing)
+// usock implementation 
 int usock(int type, const char *host, const char *service) {
-    // Return a dummy socket for fuzzing - most operations will be mocked anyway
+
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        // If socket creation fails, return error
         return -1;
     }
     // For fuzzing, just return the socket - don't actually connect
     return fd;
 }
 
-// Stub ubus functions since we're not using the real ubus.c
 void ustp_ubus_init(void) {
-    // Minimal implementation for fuzzing - no output
 }
 
 void ustp_ubus_exit(void) {
-    // Minimal implementation for fuzzing - no output
 }
 EOF
 $CC $CFLAGS -c missing_funcs.c -o missing_funcs.o
