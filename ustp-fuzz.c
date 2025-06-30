@@ -210,12 +210,35 @@ static void fuzz_mstp_create_msti(const uint8_t *data, size_t size) {
         memcpy(&mstid, data + offset, 2);
         offset += 2;
 
-        // Let fuzzer input drive the testing directly
-        MSTP_IN_create_msti(br, mstid);
+        uint16_t test_cases[] = {
+            mstid,                    // Direct fuzzer input
+            mstid % (MAX_MSTID + 1),  // Constrained to valid range
+            0,                        // Invalid (CIST)
+            1,                        // Minimum valid
+            MAX_MSTID,               // Maximum valid
+            MAX_MSTID + 1,           // Invalid (too large)
+            65535,                   // Maximum uint16_t
+        };
+
+        for (size_t i = 0; i < sizeof(test_cases)/sizeof(test_cases[0]) && test_count < max_tests; i++) {
+            uint16_t test_mstid = test_cases[i];
+            
+            bool result = MSTP_IN_create_msti(br, test_mstid);
+            
+            test_count++;
+        }
+    }
+
+    for (uint16_t i = 1; i <= 10 && i <= MAX_MSTID && test_count < max_tests; i++) {
+        MSTP_IN_create_msti(br, i);
         test_count++;
     }
 
-
+    if (test_count < max_tests) {
+        MSTP_IN_create_msti(br, 1);
+        MSTP_IN_create_msti(br, 1);
+        test_count += 2;
+    }
 
     MSTP_IN_delete_bridge(br);
     free(br);
