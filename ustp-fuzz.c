@@ -181,7 +181,6 @@ static void fuzz_worker_thread(const uint8_t *data, size_t size) {
         event_count++;
     }
 
-    usleep(10000);
     fuzzer_shutdown = true;
     pthread_cond_signal(&fuzzer_worker_queue.cond);
 
